@@ -13,10 +13,9 @@ if uploaded_file is not None:
 
     # fetch unique users
     user_list = df['user'].unique().tolist()
-    # user_list.remove('chat_notification')
     user_list.sort()
-    user_list.insert(0,'Overall')
-    selected_user = st.sidebar.selectbox('Show analysis wrt',user_list)
+    user_list.insert(0, 'Overall')
+    selected_user = st.sidebar.selectbox('Show analysis wrt', user_list)
 
     if st.sidebar.button("Show Analysis"):
 
@@ -55,7 +54,7 @@ if uploaded_file is not None:
         fig, ax = plt.subplots()
         col1, col2 = st.columns(2)
         with col1:
-            ax.plot(daily_timeline_df['only_date'],daily_timeline_df['message'])
+            ax.plot(daily_timeline_df['only_date'], daily_timeline_df['message'])
             plt.xticks(rotation=90)
             st.pyplot(fig)
         with col2:
@@ -81,15 +80,19 @@ if uploaded_file is not None:
 
         st.title("Weekly Activity Map")
         user_heatmap = helper.activity_heatmap(selected_user, df)
-        fig, ax = plt.subplots()
-        ax = sns.heatmap(user_heatmap)
-        st.pyplot(fig)
 
+        # Check if user_heatmap DataFrame is empty
+        if user_heatmap.empty:
+            st.write("No data available for the activity heatmap.")
+        else:
+            fig, ax = plt.subplots()
+            ax = sns.heatmap(user_heatmap)
+            st.pyplot(fig)
 
         # finding the busiest users in the group
         if selected_user == 'Overall':
             st.title('Most Busy Users')
-            x,new_df = helper.most_busy_users(df)
+            x, new_df = helper.most_busy_users(df)
             fig, ax = plt.subplots()
             col1, col2 = st.columns(2)
 
@@ -100,10 +103,10 @@ if uploaded_file is not None:
             with col2:
                 st.dataframe(new_df)
 
-        # WordCloud
+        #WordCloud
         st.title("WordCloud")
         df_wc = helper.create_wordcloud(selected_user, df)
-        fig,ax = plt.subplots()
+        fig, ax = plt.subplots()
         ax.imshow(df_wc)
         st.pyplot(fig)
 
@@ -117,14 +120,22 @@ if uploaded_file is not None:
         st.pyplot(fig)
 
         # emoji analysis
+        # Ensure DataFrame has correct column names
         emoji_df = helper.emoji_helper(selected_user, df)
+
         st.title('Emoji Analysis')
 
         col1, col2 = st.columns(2)
 
         with col1:
             st.dataframe(emoji_df)
+
         with col2:
             fig, ax = plt.subplots()
-            ax.pie(emoji_df[1], labels=emoji_df[0], textprops={'fontname': 'Segoe UI Emoji'}, autopct="%0.2f")
-            st.pyplot(fig)
+            
+            # Fix: Use column names instead of index-based access
+            if not emoji_df.empty:
+                ax.pie(emoji_df["Count"], labels=emoji_df["Emoji"], textprops={'fontname': 'Segoe UI Emoji'}, autopct="%0.2f")
+                st.pyplot(fig)
+            else:
+                st.write("No emojis found in this chat!")
