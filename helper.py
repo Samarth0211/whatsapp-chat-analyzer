@@ -7,6 +7,10 @@ import os
 
 extractor = URLExtract()
 
+# Load stop words once to optimize performance
+file_path = os.path.join(os.path.dirname(__file__), 'stop_hinglish.txt')
+with open(file_path, 'r') as f:
+    stop_words = set(f.read().splitlines())  # Using a set for faster lookup
 
 def fetch_stats(selected_user, df):
     if selected_user != 'Overall':
@@ -19,7 +23,7 @@ def fetch_stats(selected_user, df):
 
     num_media_messages = df[df['message'] == '<Media omitted>\n'].shape[0]
 
-    links =[]
+    links = []
     for message in df['message']:
         links.extend(extractor.find_urls(message))
 
@@ -34,51 +38,71 @@ def most_busy_users(df):
 
 
 def create_wordcloud(selected_user, df):
-    file_path = os.path.join(os.path.dirname(__file__), 'stop_hinglish.txt')
-    f = open(file_path, 'r')
-    stop_words = f.read()
-
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
+
+    # Remove any media messages or empty messages
     temp = df[df['message'] != '<Media omitted>\n']
+    
+    # Remove system messages like "Messages and calls are end-to-end encrypted"
+    temp = temp[~temp['message'].str.contains('created group|added you|Messages and calls are end-to-end encrypted', na=False)]
+
+    # Ensure all messages are strings
+    temp['message'] = temp['message'].astype(str)
 
     def remove_stop_words(message):
-        y = []
-        for word in message.lower().split():
-            if word not in stop_words:
-                y.append(word)
-        return " ".join(y)
+        # Only keep words that are not in the stop_words list
+        words = [word for word in message.lower().split() if word not in stop_words]
+        
+        return " ".join(words)
 
     wc = WordCloud(width=500, height=500, min_font_size=10, background_color='white')
+
+    # Apply stop word removal
     temp['message'] = temp['message'].apply(remove_stop_words)
-    df_wc = wc.generate(temp['message'].str.cat(sep=" "))
+
+    # Concatenate all messages into a single string
+    all_messages = temp['message'].str.cat(sep=" ")
+
+    # Check if we have any valid words after concatenation
+    if len(all_messages.split()) == 0:
+        raise ValueError("No valid words found after removing stop words.")
+    
+    # Generate word cloud
+    df_wc = wc.generate(all_messages)  # Generate word cloud from the concatenated string
     return df_wc
 
 
+
+
+
 def most_common_words(selected_user, df):
-    f = open('stop_hinglish.txt', 'r')
-    stop_words = f.read()
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
+    
+    # Remove media messages
     temp = df[df['message'] != '<Media omitted>\n']
+    
     words = []
     for message in temp['message']:
         for word in message.lower().split():
-            if word not in stop_words:
+            if word not in stop_words:  # Filter out stop words
                 words.append(word)
 
+    # Get most common words
     most_common_df = pd.DataFrame(Counter(words).most_common(15))
-
     return most_common_df
 
 
 def emoji_helper(selected_user, df):
     if selected_user != 'Overall':
         df = df[df['user'] == selected_user]
+
     emojis = []
     for message in df['message']:
-        emojis.extend([c for c in message if c in emoji.UNICODE_EMOJI['en']])
-    emoji_df = pd.DataFrame(Counter(emojis).most_common(len(Counter(emojis))))
+        emojis.extend([c for c in message if c in emoji.EMOJI_DATA])  # FIXED ✅
+
+    emoji_df = pd.DataFrame(Counter(emojis).most_common(len(Counter(emojis))), columns=['Emoji', 'Count'])
     return emoji_df.head(10)
 
 
@@ -91,7 +115,7 @@ def timeline_help(selected_user, df):
     for i in range(timeline.shape[0]):
         time.append(timeline['month'][i] + "-" + str(timeline['year'][i]))
     timeline['time'] = time
-    timeline.drop(['year','month','month_num'], axis=1, inplace=True)
+    timeline.drop(['year', 'month', 'month_num'], axis=1, inplace=True)
     timeline = timeline[['time', 'message']]
     return timeline
 
